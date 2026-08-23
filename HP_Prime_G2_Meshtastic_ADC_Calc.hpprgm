@@ -1,0 +1,74 @@
+// ============================================================
+// MeshADC — Meshtastic ADC Multiplier Calculator (HP Prime G2)
+//
+// Ported from: in-sympathy/meshtasticChargeLevelFix
+// (github.com/in-sympathy/meshtasticChargeLevelFix)
+//
+// The original script talks to a Meshtastic device over USB
+// serial (via a Python venv + the `meshtastic` CLI) to read and
+// write power.adc_multiplier_override, then reboots the node.
+// None of that is possible on the calculator, so this program
+// keeps ONLY the calibration math and its input validation:
+//
+//   new_multiplier = current_multiplier * (target_v / displayed_v)
+//
+// Workflow on the calculator:
+//   1. Read the current power.adc_multiplier_override value
+//      off your device yourself (meshtastic --get ...).
+//   2. Charge the device to 100% and note the voltage it shows.
+//   3. Run this program, enter the three values, get the new
+//      multiplier, then set it on the device yourself
+//      (meshtastic --set power.adc_multiplier_override <value>
+//      followed by --reboot).
+// ============================================================
+
+EXPORT MeshADC()
+BEGIN
+  LOCAL cur, vdisp, vtarget, newm, msg, res;
+
+  // Starting values shown in the input dialog (edit as needed)
+  cur:=3.2;
+  vdisp:=4.05;
+  vtarget:=4.2;
+
+  res:=INPUT({cur,vdisp,vtarget},
+    "Meshtastic ADC Multiplier",
+    {"Current mult.:","Displayed V @100%:","Target V @100%:"},
+    {"power.adc_multiplier_override, current value",
+     "Voltage the device shows at 100% charge",
+     "Target full-charge voltage, Li-ion = 4.2"});
+
+  IF res==0 THEN
+    // User cancelled
+    RETURN;
+  END;
+
+  // ---- Validation (mirrors the original script's checks) ----
+  IF cur<=0 THEN
+    MSGBOX("Error: current multiplier must be > 0.");
+    RETURN;
+  END;
+
+  IF vdisp<=2.5 OR vdisp>=5.0 THEN
+    MSGBOX("Error: displayed voltage looks unrealistic (expected roughly 2.5-5.0 V).");
+    RETURN;
+  END;
+
+  IF vtarget<=0 THEN
+    MSGBOX("Error: target voltage must be > 0.");
+    RETURN;
+  END;
+
+  // ---- Core formula: new = current x (target / displayed) ----
+  newm:=ROUND(cur*(vtarget/vdisp),4);
+
+  msg:="New multiplier = "+STRING(newm)+CHAR(10)+
+       "Formula: current x (target / displayed)";
+
+  IF newm<2.0 OR newm>6.0 THEN
+    msg:=msg+CHAR(10)+CHAR(10)+
+      "WARNING: result is outside the typical 2-6 range. Double-check before applying it on the device.";
+  END;
+
+  MSGBOX(msg);
+END;
